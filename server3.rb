@@ -1,5 +1,4 @@
 require 'socket'
-require 'uri'
 
 # Files will be served from this directory
 WEB_ROOT = './public'
