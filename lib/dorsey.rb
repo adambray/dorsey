@@ -6,7 +6,19 @@ require_relative 'constants'
 $routes = {}
 
 def get(path, &block)
-  $routes[path] = block.to_proc
+  $routes["get #{path}"] = block.to_proc
+end
+
+def post(path, &block)
+  $routes["post #{path}"] = block.to_proc
+end
+
+def put(path, &block)
+  $routes["put #{path}"] = block.to_proc
+end
+
+def delete(path, &block)
+  $routes["delete #{path}"] = block.to_proc
 end
 
 get("/cheese") do
@@ -19,8 +31,12 @@ end
 # This helper function parses the extension of the
 # requested file and then looks up its content type.
 
-def route_exists?(path)
-  $routes.keys.include?(path)
+def route_exists?(route)
+  $routes.keys.include?(route[:route])
+end
+
+def get_proc(route)
+  $routes[route[:route]]
 end
 
 def header(content, status=200, type=:file)
@@ -42,16 +58,24 @@ end
 # This helper function parses the Request-Line and
 # generates a path to a file on the server.
 
-def get_request(request_line)
-  path  = request_line.split(" ")[1]
+def build_route(request_line)
+  request = request_line.split(" ")
+  verb = request[0].downcase
+  path = request[1].downcase
 
-  file_path = File.join(WEB_ROOT, path)
+  return {verb: verb, path: path, route: "#{verb} #{path}"}
+end
+
+def build_request(request_line)
+  route = build_route(request_line)
+
+  file_path = File.join(WEB_ROOT, route[:path])
   if File.exist?(file_path) && !File.directory?(file_path)
-    return {type: :file, path: file_path, status: 200}
-  elsif route_exists?(path)
-    return {type: :route, path: path, status: 200, proc: $routes[path]}
+    return route.merge({type: :file, path: file_path, status: 200})
+  elsif route_exists?(route)
+    return route.merge({type: :route, proc: get_proc(route), status: 200})
   else
-    return {type: :not_found, path: path, status: 404}
+    return route.merge({type: :not_found, status: 404})
   end
 
 end
@@ -63,7 +87,8 @@ loop do
   request_line = socket.gets
 
   puts request_line
-  request = get_request(request_line)
+  # binding.pry
+  request = build_request(request_line)
 
   case request[:type]
   when :file
