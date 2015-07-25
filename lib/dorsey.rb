@@ -3,10 +3,7 @@ require 'pry'
 require 'socket'
 require_relative 'constants'
 
-$routes = {
-  "/" => ->() { "hello world!" },
-  "/boop" => ->() { "I boop you!" }
-}
+$routes = {}
 
 def get(path, &block)
   $routes[path] = block.to_proc
