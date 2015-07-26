@@ -2,6 +2,7 @@ require 'pry'
 
 require 'socket'
 require_relative 'constants'
+require_relative 'request'
 
 $routes = {}
 
@@ -32,11 +33,7 @@ end
 # requested file and then looks up its content type.
 
 def route_exists?(route)
-  $routes.keys.include?(route[:route])
-end
-
-def get_proc(route)
-  $routes[route[:route]]
+  $routes.keys.include?(route)
 end
 
 def header(content, status=200, type=:file)
@@ -55,30 +52,6 @@ def content_type(path)
   CONTENT_TYPE_MAPPING.fetch(ext, DEFAULT_CONTENT_TYPE)
 end
 
-# This helper function parses the Request-Line and
-# generates a path to a file on the server.
-
-def build_route(request_line)
-  request = request_line.split(" ")
-  verb = request[0].downcase
-  path = request[1].downcase
-
-  return {verb: verb, path: path, route: "#{verb} #{path}"}
-end
-
-def build_request(request_line)
-  route = build_route(request_line)
-
-  file_path = File.join(WEB_ROOT, route[:path])
-  if File.exist?(file_path) && !File.directory?(file_path)
-    return route.merge({type: :file, path: file_path, status: 200})
-  elsif route_exists?(route)
-    return route.merge({type: :route, proc: get_proc(route), status: 200})
-  else
-    return route.merge({type: :not_found, status: 404})
-  end
-
-end
 
 server = TCPServer.new('localhost', 2345)
 
@@ -88,25 +61,25 @@ loop do
 
   puts request_line
   # binding.pry
-  request = build_request(request_line)
+  request = Request.new(request_line)
 
-  case request[:type]
+  case request.type
   when :file
-    File.open(request[:path], "rb") do |file|
-      socket.print header(file, request[:status])
+    File.open(request.file_path, "rb") do |file|
+      socket.print header(file, request.status)
       socket.print "\r\n"
       IO.copy_stream(file, socket)
     end
   when :route
-    message = request[:proc].call
-    socket.print header(message, request[:status], :text)
+    message = request.proc.call
+    socket.print header(message, request.status, :text)
     socket.print "\r\n"
     socket.print message
   when :not_found
     message = "File not found\n"
 
     # respond with a 404 error code to indicate the file does not exist
-    socket.print header(message, request[:status], :text)
+    socket.print header(message, request.status, :text)
     socket.print "\r\n"
     socket.print message
   end
